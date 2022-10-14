@@ -4,6 +4,8 @@ import os
 from dotenv import load_dotenv
 
 import DebtProcess
+import UnicodeReactions as React
+import Accounts
 
 
 class CommandBot(commands.Bot):
@@ -18,54 +20,26 @@ class CommandBot(commands.Bot):
 
         self.__running_processes: [int, DebtProcess.Process] = {}
 
-    """
-    async def on_message(self, message: discord.Message):
-        if message.author == self.user:
-            return
-
-        if message.content[0] == ".":
-            await self.process_commands(message)
-            return
-        # call user.state.on_message as state machine
-
-        print(message.content)
-
-        msg = await message.channel.send("Tag leude!")
-        await msg.add_reaction('\N{WHITE HEAVY CHECK MARK}')
-        await msg.add_reaction('\N{CROSS MARK}')
-
-        # unsubscribe(self.bot)
-
-    async def on_reaction_add(self, reaction: discord.Reaction, user: discord.User):
-        print("reaction")
-        if user == self.user:
-            return
-
-        # call user.state.on_message as state machine
-
-        msg = await reaction.message.channel.send("Nice reaction!")
-        # msg.id
-
-    async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
-        if payload.user_id == self.user.id:
-            return
-
-        # payload.message_id ==
-        if payload.emoji == '\N{WHITE HEAVY CHECK MARK}':
-            print("yay")
-
-        print(payload.emoji)
-    """
-
     def __define_commands(self):
         @self.command()
         async def add_account(ctx: commands.context, user_id: int):
             sender = ctx.author
-            recipient = await self.fetch_user(user_id)
+            try:
+                recipient = await self.fetch_user(user_id)
+            except discord.errors.NotFound:
+                await sender.send("Sorry, the user doesn't exist.")
+                return
+
+            # check if account already exists
+            acc = Accounts.Account.fetch(3, 3)
+
+            if acc is not None:
+                await sender.send(f"An account between you and {recipient} already exists.")
+                return
 
             msg = await recipient.send(f"{sender} wants to create an account with you, {recipient}. Do you agree?")
-            await msg.add_reaction('\N{WHITE HEAVY CHECK MARK}')
-            await msg.add_reaction('\N{CROSS MARK}')
+            await msg.add_reaction(React.YES)
+            await msg.add_reaction(React.NO)
 
             registration_process = DebtProcess.RegistrationProcess(recipient, sender, msg.id)
             self.__running_processes[recipient.id] = registration_process
@@ -75,24 +49,34 @@ class CommandBot(commands.Bot):
         async def add(ctx: commands.context, user_id: int):
 
             sender = ctx.author
-            recipient = await self.fetch_user(user_id)
 
-            msg = await ctx.send("What do you want to add?\n"
-                                 "```\N{Regional Indicator Symbol Letter A}: Single Item\n"
-                                 "\N{Regional Indicator Symbol Letter B}: Multi Item\n"
-                                 "\N{Regional Indicator Symbol Letter C}: Gas```")
+            try:
+                recipient = await self.fetch_user(user_id)
+            except discord.errors.NotFound:
+                await ctx.send("Sorry, the user doesn't exist.")
+                return
 
-            await msg.add_reaction('\N{Regional Indicator Symbol Letter A}')
-            await msg.add_reaction('\N{Regional Indicator Symbol Letter B}')
-            await msg.add_reaction('\N{Regional Indicator Symbol Letter C}')
+            acc = Accounts.Account.fetch(3, 3)
 
-            addition_process = DebtProcess.AddProcess(sender, recipient, msg.id)
+            if acc is None:
+                await sender.send(f"Seems like you don't have an account with {recipient}. If you want to create one, "
+                                  f"use the command ``.add_account user_id``")
+                return
+
+            addition_process = DebtProcess.AddProcess(sender, recipient, -1)
+            await addition_process.start()
+
             self.__running_processes[recipient.id] = addition_process
             self.__running_processes[sender.id] = addition_process
 
         @self.command()
         async def cancel(ctx: commands.context):
             # cancels all active processes of user, so they can use the system again
+            pass
+
+        @self.command()
+        async def _help(ctx: commands.context):
+            #  give list of all commands
             pass
 
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
@@ -102,13 +86,15 @@ class CommandBot(commands.Bot):
         if payload.user_id not in self.__running_processes:
             return
 
-        completed = await self.__running_processes[payload.user_id].process_reaction(payload)
+        sender_id = payload.user_id
+
+        if sender_id not in self.__running_processes:
+            return
+
+        completed = await self.__running_processes[sender_id].process(payload)
 
         if completed:
-            sender = self.__running_processes[payload.user_id].user1
-            recipient = self.__running_processes[payload.user_id].user2
-            del self.__running_processes[sender.id]
-            del self.__running_processes[recipient.id]
+            self.__remove_process(sender_id)
 
     async def on_message(self, message: discord.Message):
         if message.author == self.user:
@@ -123,13 +109,17 @@ class CommandBot(commands.Bot):
         if sender_id not in self.__running_processes:
             return
 
-        completed = await self.__running_processes[sender_id].process_message(message)
+        completed = await self.__running_processes[sender_id].process(message)
 
         if completed:
-            sender = self.__running_processes[sender_id].user1
-            recipient = self.__running_processes[sender_id].user2
-            del self.__running_processes[sender.id]
-            del self.__running_processes[recipient.id]
+            self.__remove_process(sender_id)
+
+    def __remove_process(self, sender_id):
+        # TODO: error handling in case of single user process
+        sender = self.__running_processes[sender_id].user1
+        recipient = self.__running_processes[sender_id].user2
+        del self.__running_processes[sender.id]
+        del self.__running_processes[recipient.id]
 
     def run_bot(self):
         load_dotenv()

@@ -13,3 +13,6 @@ class Process:
 
     def process_message(self, message: discord.Message) -> bool:
         pass
+
+    def process(self, args) -> bool:
+        pass
