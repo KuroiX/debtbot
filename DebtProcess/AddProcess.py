@@ -147,7 +147,7 @@ class AddProcess(DebtProcess.Process):
 
         return (f"```"
                 f"Amount:      {self._sub_process_info[0][1]}\n"
-                f"By:          {self.user1.name}\n"
+                f"By:          {self.user1.name} (*-1/1)\n"
                 f"Your share:  {share}%.\n"
                 f"Comment:     {self.__comment}\n"
                 f"--------------------------------------------------------------\n"
