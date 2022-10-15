@@ -1,4 +1,3 @@
-import inspect
 import discord
 
 import DebtProcess
@@ -7,89 +6,38 @@ import UnicodeReactions as React
 
 class AddProcess(DebtProcess.Process):
     def __init__(self, user1: discord.User, user2: discord.User, reaction_message_id: int):
+        # needs to be called first to initialize other instance variables ???
         super().__init__(user1, user2, reaction_message_id)
 
         self.__amount = 0.00
+        self.__user1_share = 0.00
         self.__payer = None
         self.__comment = None
 
-        self.__sub_process = None
+        # self.__sub_process = None
 
-        self.__state = 0
-        self.__handles: list[callable] = [self.__handle_type, self.__handle_amount, self.__handle_payer,
-                                          self.__handle_comment, self.__handle_confirmation1,
-                                          self.__handle_confirmation2]
+        self._handles: list[callable] = [self.__handle_type, self.__handle_payer, self.__handle_share,
+                                         self.__handle_comment, self.__handle_confirmation1,
+                                         self.__handle_confirmation2]
 
         # self.__handles: list[callable] = [self.__handle_type]
 
         # technically doable with name search too
         # but then the methods need to fit to the naming scheme
         # TODO: maybe look into decorators??
-        self.__question_for: dict[callable, callable] = {self.__handle_type: self.__ask_for_type,
-                                                         self.__handle_payer: self.__ask_for_payer,
-                                                         self.__handle_amount: self.__ask_for_amount,
-                                                         self.__handle_comment: self.__ask_for_comment,
-                                                         self.__handle_confirmation1: self.__ask_for_confirmation1,
-                                                         self.__handle_confirmation2: self.__ask_for_confirmation2}
+        self._question_for: dict[callable, callable] = {self.__handle_type: self.__ask_for_type,
+                                                        self.__handle_payer: self.__ask_for_payer,
+                                                        self.__handle_comment: self.__ask_for_comment,
+                                                        self.__handle_confirmation1: self.__ask_for_confirmation1,
+                                                        self.__handle_confirmation2: self.__ask_for_confirmation2,
+                                                        self.__handle_share: self.__ask_for_share}
 
-    # region probably into abstract parent class
-
-    async def start(self):
-        await self.__ask_next_question()
-
-    async def process(self, args) -> bool:
-        if self.__sub_process is not None:
-            return await self.__do_sub_process(args)
-        else:
-            return await self.__do_current_process(args)
-
-    async def __do_sub_process(self, args) -> bool:
-        sub_result = self.__sub_process.process(args)
-
-        if sub_result:
-            self.__sub_process = None
-
-        return sub_result & (self.__state >= len(self.__handles))
-
-    async def __do_current_process(self, args) -> bool:
-        func = self.__handles[self.__state]
-
-        if isinstance(args, discord.RawReactionActionEvent):
-            if args.message_id != self._reaction_message_id:
-                return False
-            # not sure if this is bad code or not, but it's cool
-            # also it is actually pretty nice because that way one only has to make sure
-            # that the signature name is correct
-            # and can change the order in the init only
-            # furthermore potential to move it to the parent class, because that should be the same
-            # in every process.
-            # but then it might get confusing? who knows
-            # another option is to have two more lists that do the same or another dict
-            # (probably dict is best)
-            # with a dict, process_reaction and process_messages can be fused probably
-            if "payload" not in inspect.signature(func).parameters:
-                print("Not a payload func")
-                return False
-        elif isinstance(args, discord.Message):
-            if "message" not in inspect.signature(func).parameters:
-                print("Not a message func")
-                return False
-
-        await func(args)
-
-        self.__state += 1
-        result = self.__state >= len(self.__handles)
-
-        if not result:
-            await self.__ask_next_question()
-
-        return result & (self.__sub_process is None)
-
-    # endregion
-
-    # region questions
+    def retrieve_information(self):
+        # todo
+        pass
 
     async def __ask_for_type(self):
+
         msg = await self.user1.send("What do you want to add?\n"
                                     f"```{React.A}: Single Item\n"
                                     f"{React.B}: Multi Item\n"
@@ -101,20 +49,56 @@ class AddProcess(DebtProcess.Process):
 
         self._reaction_message_id = msg.id
 
-    async def __ask_for_amount(self):
-        await self.user1.send("How much did it cost? (Format: x.yz)")
+    async def __handle_type(self, payload: discord.RawReactionActionEvent):
+        reaction = payload.emoji.name
+
+        # todo no case statement
+        if reaction == React.A:
+            self._sub_process = DebtProcess.SimpleAddProcess(self.user1, self.user2, -1, False)
+        elif reaction == React.B:
+            self._sub_process = DebtProcess.SimpleAddProcess(self.user1, self.user2, -1, True)
+        else:
+            await self.user1.send("Function does not exist yet!")
+            self._state -= 1
+
+        return
 
     async def __ask_for_payer(self):
-        msg = await self.user1.send(f"Who paid? A: {self.user1.name} or B: {self.user2.name}?")
+        msg = await self.user1.send(f"Who paid?"
+                                    f"```A: {self.user1.name}\n"
+                                    f"B: {self.user2.name}```")
 
         await msg.add_reaction(React.A)
         await msg.add_reaction(React.B)
 
         self._reaction_message_id = msg.id
 
+    async def __handle_payer(self, payload: discord.RawReactionActionEvent):
+        if payload.emoji.name == React.A:
+            self.__payer = True
+
+        if payload.emoji.name == React.B:
+            self.__payer = False
+
+        return
+
+    async def __ask_for_share(self):
+        await self.user1.send("What was your share in [0, 1]?")
+
+    async def __handle_share(self, message: discord.Message):
+        share = float(message.content)
+        self.__user1_share = share
+
+    async def __ask_for_comment(self):
+        await self.user1.send("What was it about? Leave a comment for the other person.")
+
+    async def __handle_comment(self, message: discord.Message):
+        self.__comment = message.content
+        return
+
     async def __ask_for_confirmation1(self):
         msg = await self.user1.send(f"Summary:"
-                                    f"{self.__debt_request_summary()}"
+                                    f"{self.__debt_request_summary(True)}"
                                     f"Is that right?")
 
         await msg.add_reaction(React.YES)
@@ -122,9 +106,18 @@ class AddProcess(DebtProcess.Process):
 
         self._reaction_message_id = msg.id
 
+    async def __handle_confirmation1(self, payload: discord.RawReactionActionEvent):
+        if payload.emoji.name == React.YES:
+            return
+
+        if payload.emoji.name == React.NO:
+            await self.user1.send("Ok, let's try again!")
+            self._state = -1
+            return
+
     async def __ask_for_confirmation2(self):
         msg = await self.user2.send(f"{self.user1.name} requested an new debt:"
-                                    f"{self.__debt_request_summary()}"
+                                    f"{self.__debt_request_summary(False)}"
                                     f"Do you accept?")
 
         await msg.add_reaction(React.YES)
@@ -132,65 +125,38 @@ class AddProcess(DebtProcess.Process):
 
         self._reaction_message_id = msg.id
 
-    async def __ask_for_comment(self):
-        await self.user1.send("What was it about? Leave a comment for the other person.")
-
-    # endregion
-
-    # region handles
-
-    async def __handle_type(self, payload: discord.RawReactionActionEvent):
-        # todo handle type, currently all types do the same
-
-        return
-
-    async def __handle_payer(self, payload: discord.RawReactionActionEvent):
-        if payload.emoji.name == "\N{Regional Indicator Symbol Letter A}":
-            self.__payer = True
-
-        if payload.emoji.name == "\N{Regional Indicator Symbol Letter B}":
-            self.__payer = False
-
-        return
-
-    async def __handle_confirmation1(self, payload: discord.RawReactionActionEvent):
-        # if confirmed
-        return
-
     async def __handle_confirmation2(self, payload: discord.RawReactionActionEvent):
+        if payload.emoji.name == React.YES:
+            await self.user1.send(f"Request accepted, new balance is: coming soon")
+            await self.user2.send(f"Request accepted, new balance is: coming soon")
+            return
 
-        await self.user1.send(f"Request accepted, new balance is: {self.__amount}")
-
-        return
-
-    async def __handle_amount(self, message: discord.Message):
-        amount = float(message.content)
-        self.__amount = amount
-        return
-
-    async def __handle_comment(self, message: discord.Message):
-        self.__comment = message.content
-        return
-
-    # endregion
+        if payload.emoji.name == React.NO:
+            await self.user1.send(f"Seems like your request was denied.")
+            # todo maybe ask user2 why?
+            # in subprocess :D
+            await self.user2.send(f"You denied {self.user1}'s request.")
+            return
 
     # region other & todo
 
-    def __debt_request_summary(self) -> str:
-        return (f"```"
-                f"Amount:      {self.__amount}€\n"
-                f"By:          {self.user1.name}\n"
-                f"Your share:  50%.\n"
-                f"Comment:     {self.__comment}"
-                f"```")
+    def __debt_request_summary(self, is_user_1) -> str:
 
-    async def __ask_next_question(self):
-        next_handle = self.__handles[self.__state]
-        ask = self.__question_for[next_handle]
-        await ask()
+        share = self.__user1_share if is_user_1 else 1 - self.__user1_share
+        share *= 100
+
+        return (f"```"
+                f"Amount:      {self._sub_process_info[0][1]}\n"
+                f"By:          {self.user1.name}\n"
+                f"Your share:  {share}%.\n"
+                f"Comment:     {self.__comment}\n"
+                f"--------------------------------------------------------------\n"
+                f"Account:     before - (sum) * share"
+                f"```")
 
     async def __addition_accepted(self):
         # todo
+
         balance = 0.00
         await self.user1.send(f"Successfully created an account with {self.user2}.\nCurrent balance is: {balance}€.")
         await self.user2.send(f"Successfully created an account with {self.user1}.\nCurrent balance is: {balance}€.")
