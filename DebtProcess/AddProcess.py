@@ -53,13 +53,13 @@ class AddProcess(DebtProcess.Process):
         reaction = payload.emoji.name
 
         # todo no case statement
+        # let it extend dynamically like a language package
         if reaction == React.A:
             self._sub_process = DebtProcess.SimpleAddProcess(self.user1, self.user2, -1, False)
         elif reaction == React.B:
             self._sub_process = DebtProcess.SimpleAddProcess(self.user1, self.user2, -1, True)
         else:
-            await self.user1.send("Function does not exist yet!")
-            self._state -= 1
+            self._sub_process = DebtProcess.GasAddProcess(self.user1, self.user2, -1)
 
         return
 
@@ -147,7 +147,7 @@ class AddProcess(DebtProcess.Process):
 
         return (f"```"
                 f"Amount:      {self._sub_process_info[0][1]}\n"
-                f"By:          {self.user1.name} (*-1/1)\n"
+                f"By:          {self.user1.name if self.__payer else self.user2.name} (*-1/1)\n"
                 f"Your share:  {share}%.\n"
                 f"Comment:     {self.__comment}\n"
                 f"--------------------------------------------------------------\n"
@@ -156,7 +156,6 @@ class AddProcess(DebtProcess.Process):
 
     async def __addition_accepted(self):
         # todo
-
         balance = 0.00
         await self.user1.send(f"Successfully created an account with {self.user2}.\nCurrent balance is: {balance}€.")
         await self.user2.send(f"Successfully created an account with {self.user1}.\nCurrent balance is: {balance}€.")
