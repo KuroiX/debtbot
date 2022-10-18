@@ -4,9 +4,9 @@ from DebtProcess import Process
 
 
 class SimpleAddProcess(Process):
-    def __init__(self, user1: discord.User, user2: discord.User, reaction_message_id: int, is_multi_item: bool):
+    def __init__(self, requester: discord.User, recipient: discord.User, is_multi_item: bool):
         # needs to be called first to initialize other instance variables ???
-        super().__init__(user1, user2, reaction_message_id)
+        super().__init__(requester, recipient)
         self.__is_multi_item = is_multi_item
 
         self._handles: list[callable] = [self.__handle_amount]
@@ -32,7 +32,8 @@ class SimpleAddProcess(Process):
         return result_sum, final
 
     async def __ask_for_amount(self):
-        await self.user1.send("Enter the price of the next item. Finish entering items by entering 0. (Format: x.yz)")
+        await self.requester.send("Enter the price of the next item. "
+                                  "Finish entering items by entering 0. (Format: x.yz)")
 
     async def __handle_amount(self, message: discord.Message):
         amount = float(message.content)

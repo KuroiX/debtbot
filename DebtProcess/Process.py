@@ -6,10 +6,10 @@ import discord
 
 class Process(ABC):
 
-    def __init__(self, user1: discord.User, user2: discord.User, reaction_message_id: int):
-        self.user1 = user1
-        self.user2 = user2
-        self._reaction_message_id = reaction_message_id
+    def __init__(self, requester: discord.User, recipient: discord.User):
+        self.requester = requester
+        self.recipient = recipient
+        self._reaction_message_id = -1
 
         self._state = 0
         # todo figure out cleaner way (???)
@@ -18,6 +18,8 @@ class Process(ABC):
 
         self._sub_process = None
         self._sub_process_info = []
+
+        self._active_reactions = []
 
     @abstractmethod
     def retrieve_information(self):
@@ -31,6 +33,13 @@ class Process(ABC):
             return await self.__do_sub_process(args)
         else:
             return await self.__do_current_process(args)
+
+    async def _add_reaction(self, msg: discord.Message, reaction: str):
+        await msg.add_reaction(reaction)
+        self._active_reactions.append(reaction)
+
+    def __clear_reactions(self):
+        self._active_reactions.clear()
 
     async def __ask_next_question(self):
         if self._sub_process is not None:
@@ -61,6 +70,11 @@ class Process(ABC):
         if isinstance(args, discord.RawReactionActionEvent):
             if args.message_id != self._reaction_message_id:
                 return False
+
+            reaction = args.emoji.name
+            if reaction not in self._active_reactions:
+                return False
+            # TODO: test against currently active reactions and if accepted, flush
             # not sure if this is bad code or not, but it's cool
             # also it is actually pretty nice because that way one only has to make sure
             # that the signature name is correct
@@ -79,6 +93,7 @@ class Process(ABC):
                 print("Not a message func")
                 return False
 
+        self.__clear_reactions()
         await func(args)
 
         self._state += 1

@@ -1,3 +1,4 @@
-__all__ = ["Account"]
+__all__ = ["Account", "AccountManager"]
 
 from .Account import Account
+from .AccountManager import AccountManager

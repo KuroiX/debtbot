@@ -4,17 +4,17 @@ import os
 from dotenv import load_dotenv
 
 import DebtProcess
-import UnicodeReactions as React
 import Accounts
 
 
 class CommandBot(commands.Bot):
 
-    def __init__(self):
+    def __init__(self, account_manager: Accounts.AccountManager):
         default_flags = discord.Intents.default()
         default_flags.message_content = True
-
         super().__init__(command_prefix=".", intents=default_flags)
+
+        self.__account_manager = account_manager
 
         self.__define_commands()
 
@@ -23,32 +23,30 @@ class CommandBot(commands.Bot):
     def __define_commands(self):
         @self.command()
         async def add_account(ctx: commands.context, user_id: int):
-            sender = ctx.author
+            commander = ctx.author
             try:
                 recipient = await self.fetch_user(user_id)
             except discord.errors.NotFound:
-                await sender.send("Sorry, the user doesn't exist.")
+                await commander.send("Sorry, the user doesn't exist.")
                 return
 
             # check if account already exists
-            acc = Accounts.Account.fetch(3, 3)
+            acc = self.__account_manager.fetch(commander.id, user_id)
 
             if acc is not None:
-                await sender.send(f"An account between you and {recipient} already exists.")
+                await commander.send(f"An account between you and {recipient} already exists.")
                 return
 
-            msg = await recipient.send(f"{sender} wants to create an account with you, {recipient}. Do you agree?")
-            await msg.add_reaction(React.YES)
-            await msg.add_reaction(React.NO)
+            registration_process = DebtProcess.RegistrationProcess(recipient, commander, self.__account_manager)
+            await registration_process.start()
 
-            registration_process = DebtProcess.RegistrationProcess(recipient, sender, msg.id)
             self.__running_processes[recipient.id] = registration_process
-            self.__running_processes[sender.id] = registration_process
+            self.__running_processes[commander.id] = registration_process
 
         @self.command()
         async def add(ctx: commands.context, user_id: int):
 
-            sender = ctx.author
+            commander = ctx.author
 
             try:
                 recipient = await self.fetch_user(user_id)
@@ -56,18 +54,18 @@ class CommandBot(commands.Bot):
                 await ctx.send("Sorry, the user doesn't exist.")
                 return
 
-            acc = Accounts.Account.fetch(3, 3)
+            acc = self.__account_manager.fetch(commander.id, user_id)
 
             if acc is None:
-                await sender.send(f"Seems like you don't have an account with {recipient}. If you want to create one, "
-                                  f"use the command ``.add_account user_id``")
+                await commander.send(f"Seems like you don't have an account with {recipient}. "
+                                     f"If you want to create one, use the command ``.add_account user_id``")
                 return
 
-            addition_process = DebtProcess.AddProcess(sender, recipient, -1)
+            addition_process = DebtProcess.AddProcess(commander, recipient, acc)
             await addition_process.start()
 
             self.__running_processes[recipient.id] = addition_process
-            self.__running_processes[sender.id] = addition_process
+            self.__running_processes[commander.id] = addition_process
 
         @self.command()
         async def cancel(ctx: commands.context):
@@ -116,8 +114,8 @@ class CommandBot(commands.Bot):
 
     def __remove_process(self, sender_id):
         # TODO: error handling in case of single user process
-        sender = self.__running_processes[sender_id].user1
-        recipient = self.__running_processes[sender_id].user2
+        sender = self.__running_processes[sender_id].requester
+        recipient = self.__running_processes[sender_id].recipient
         del self.__running_processes[sender.id]
         del self.__running_processes[recipient.id]
 

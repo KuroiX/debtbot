@@ -1,33 +1,52 @@
-import DebtProcess
 import discord
+
+import DebtProcess
+import UnicodeReactions as React
+import Accounts
 
 
 class RegistrationProcess(DebtProcess.Process):
-    def __init__(self, user1: discord.User, user2: discord.User, reaction_message_id: int):
-        super().__init__(user1, user2, reaction_message_id)
+    def __init__(self, requester: discord.User, recipient: discord.User, account_manager: Accounts.AccountManager):
+        super().__init__(requester, recipient)
 
-        self.__accept_emoji = '\N{WHITE HEAVY CHECK MARK}'
-        self.__reject_emoji = '\N{CROSS MARK}'
+        self.__account_manager = account_manager
+        self._handles = [self.__handle_confirmation]
+        self._question_for = {self.__handle_confirmation: self.__ask_for_confirmation}
 
-    async def process_reaction(self, payload: discord.RawReactionActionEvent) -> bool:
-        if payload.message_id != self._reaction_message_id:
-            return False
+    def retrieve_information(self):
+        pass
 
-        if payload.emoji.name == self.__accept_emoji:
+    async def __ask_for_confirmation(self):
+        msg = await self.recipient.send(f"{self.requester} wants to create an account with you, {self.recipient}. "
+                                        f"Do you agree?")
+        await self._add_reaction(msg, React.YES)
+        await self._add_reaction(msg, React.NO)
+        self._reaction_message_id = msg.id
+
+    async def __handle_confirmation(self, payload: discord.RawReactionActionEvent):
+        reaction = payload.emoji.name
+
+        if reaction == React.YES:
             await self.__invite_accepted()
-            return True
-
-        if payload.emoji.name == self.__reject_emoji:
+        elif reaction == React.NO:
             await self.__invite_rejected()
-            return True
-
-        return False
+        else:
+            print("Reaction not registered")
 
     async def __invite_accepted(self):
+        # todo create account outside of this class?
+        # but where...
+        # it it was in CommandBot, the command bot would need the result of the process as well
+        # seems kinda unnecessary
+        # especially because not all processes need an account manager and a callback like thing
+        await self.__account_manager.create(self.requester.id, self.recipient.id)
+
         balance = 0.00
-        await self.user1.send(f"Successfully created an account with {self.user2}.\nCurrent balance is: {balance}€.")
-        await self.user2.send(f"Successfully created an account with {self.user1}.\nCurrent balance is: {balance}€.")
+        await self.requester.send(f"Successfully created an account with {self.recipient}.\n"
+                                  f"Current balance is: {balance}€.")
+        await self.recipient.send(f"Successfully created an account with {self.requester}.\n"
+                                  f"Current balance is: {balance}€.")
 
     async def __invite_rejected(self):
-        await self.user1.send(f"Seems like {self.user2} doesn't want to open an account with you :(")
-        await self.user2.send(f"You rejected {self.user1}'s invite.")
+        await self.requester.send(f"Seems like {self.recipient} doesn't want to open an account with you :(")
+        await self.recipient.send(f"You rejected {self.requester}'s invite.")

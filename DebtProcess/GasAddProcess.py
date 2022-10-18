@@ -4,9 +4,9 @@ from DebtProcess import Process
 
 
 class GasAddProcess(Process):
-    def __init__(self, user1: discord.User, user2: discord.User, reaction_message_id: int):
+    def __init__(self, requester: discord.User, recipient: discord.User):
         # needs to be called first to initialize other instance variables ???
-        super().__init__(user1, user2, reaction_message_id)
+        super().__init__(requester, recipient)
 
         self._handles: list[callable] = [self.__handle_distance, self.__handle_gas_spent, self.__handle_price_per_y]
 
@@ -23,21 +23,21 @@ class GasAddProcess(Process):
         return result, f"{self._distance}km * ({self._gas_per_distance}l / 100km) * {self._price_per_y}€/l= {result}€"
 
     async def __ask_for_distance(self):
-        await self.user1.send("Enter the distance traveled in km.")
+        await self.requester.send("Enter the distance traveled in km.")
 
     async def __handle_distance(self, message: discord.Message):
         self._distance = float(message.content)
         return
 
     async def __ask_for_gas_spent(self):
-        await self.user1.send("Enter the gas spent per 100km.")
+        await self.requester.send("Enter the gas spent per 100km.")
 
     async def __handle_gas_spent(self, message: discord.Message):
         self._gas_per_distance = float(message.content)
         return
 
     async def __ask_for_price_per_y(self):
-        await self.user1.send("Enter the price per l gas.")
+        await self.requester.send("Enter the price per l gas.")
 
     async def __handle_price_per_y(self, message: discord.Message):
         self._price_per_y = float(message.content)

@@ -1,16 +1,5 @@
-from inspect import signature
+from attr import attr
 
+import Accounts
 
-def func1(param: int):
-    return 3
-
-
-def func2(param2: str):
-    return "boi"
-
-
-test = func1
-print(type(signature(test).parameters["param"]))
-
-if "param2" in signature(func2).parameters:
-    print("yey")
+Accounts.Account.fetch(0, 1)
