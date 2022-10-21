@@ -93,7 +93,7 @@ class AddProcess(DebtProcess.Process):
 
     async def __ask_for_confirmation1(self):
         msg = await self.requester.send(f"Summary:"
-                                        f"{self.__debt_request_summary(self.__account.is_owner(self.requester.id), True)}"
+                                        f"{self.__debt_request_summary(True)}"
                                         f"Is that right?")
 
         await self._add_reaction(msg, React.YES)
@@ -112,7 +112,7 @@ class AddProcess(DebtProcess.Process):
 
     async def __ask_for_confirmation2(self):
         msg = await self.recipient.send(f"{self.requester.name} requested an new debt:"
-                                        f"{self.__debt_request_summary(self.__account.is_owner(self.recipient.id), False)}"
+                                        f"{self.__debt_request_summary(False)}"
                                         f"Do you accept?")
 
         await self._add_reaction(msg, React.YES)
@@ -130,16 +130,20 @@ class AddProcess(DebtProcess.Process):
 
     # region other & todo
 
-    def __debt_request_summary(self, is_owner, is_requester) -> str:
+    def __debt_request_summary(self, is_requester) -> str:
         requester_is_owner = self.__account.is_owner(self.requester.id)
-        share_multiplier = 1 - self.__requester_share if requester_is_owner else self.__requester_share
+        share_iff = (requester_is_owner & self.__requester_is_payer) | \
+                    (not requester_is_owner & (not self.__requester_is_payer))
+        share_multiplier = 1 - self.__requester_share if share_iff else self.__requester_share
         share = self.__requester_share if is_requester else 1 - self.__requester_share
 
         payer = self.requester.name if self.__requester_is_payer else self.recipient.name
-        payer_multiplier = 1 if (self.__requester_is_payer & is_requester) else -1
+        payer_iff = (self.__requester_is_payer & is_requester) | ((not self.__requester_is_payer) & (not is_requester))
+        payer_multiplier = 1 if payer_iff else -1
+        payer_sign = "+" if payer_iff else "-"
 
-        iff = (requester_is_owner & is_requester) | (not requester_is_owner & (not is_requester))
-        user_multiplier = 1 if iff else -1
+        amount_iff = (requester_is_owner & is_requester) | (not requester_is_owner & (not is_requester))
+        user_multiplier = 1 if amount_iff else -1
         prev = self.__account.balance * user_multiplier
         debt_sum = self.__calculate_debt() * user_multiplier
         new_result = prev + debt_sum
@@ -150,21 +154,27 @@ class AddProcess(DebtProcess.Process):
                 f"Your share:  {share * 100}% (*{share_multiplier})\n"
                 f"Comment:     {self.__comment}\n"
                 f"-----------------------------------------------\n"
-                f"Account:     {prev}€ {(self._sub_process_info[0][0] * share_multiplier * payer_multiplier)}€"
+                f"Account:     {prev}€ {payer_sign} {(self._sub_process_info[0][0] * share_multiplier)}€"
                 f" = {new_result}€"
                 f"```")
 
     def __calculate_debt(self):
         requester_is_owner = self.__account.is_owner(self.requester.id)
         user_multiplier = 1 if requester_is_owner else -1
-        share_multiplier = 1 - self.__requester_share if requester_is_owner else self.__requester_share
+        share_iff = (requester_is_owner & self.__requester_is_payer) | \
+                    (not requester_is_owner & (not self.__requester_is_payer))
+        share_multiplier = 1 - self.__requester_share if share_iff else self.__requester_share
         payer_multiplier = 1 if self.__requester_is_payer else -1
         debt_sum = self._sub_process_info[0][0]
         return debt_sum * share_multiplier * user_multiplier * payer_multiplier
 
     async def __addition_accepted(self):
-        await self.requester.send(f"Request accepted, new balance is: coming soon")
-        await self.recipient.send(f"Request accepted, new balance is: coming soon")
+        new_debt = self.__calculate_debt()
+        self.__account.update(new_debt)
+        user_multiplier = 1 if self.__account.is_owner(self.requester.id) else -1
+        new_balance = self.__account.balance
+        await self.requester.send(f"Request accepted, new balance is: {new_balance * user_multiplier}")
+        await self.recipient.send(f"Request accepted, new balance is: {new_balance * user_multiplier * -1}")
 
     async def __addition_rejected(self):
         await self.requester.send(f"Seems like your request was denied.")

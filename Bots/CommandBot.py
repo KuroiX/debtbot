@@ -37,7 +37,7 @@ class CommandBot(commands.Bot):
                 await commander.send(f"An account between you and {recipient} already exists.")
                 return
 
-            registration_process = DebtProcess.RegistrationProcess(recipient, commander, self.__account_manager)
+            registration_process = DebtProcess.RegistrationProcess(commander, recipient, self.__account_manager)
             await registration_process.start()
 
             self.__running_processes[recipient.id] = registration_process
@@ -66,6 +66,29 @@ class CommandBot(commands.Bot):
 
             self.__running_processes[recipient.id] = addition_process
             self.__running_processes[commander.id] = addition_process
+
+        @self.command()
+        async def show(ctx: commands.context, user_id: int):
+            commander = ctx.author
+
+            try:
+                recipient = await self.fetch_user(user_id)
+            except discord.errors.NotFound:
+                await ctx.send("Sorry, the user doesn't exist.")
+                return
+
+            acc = self.__account_manager.fetch(commander.id, user_id)
+
+            if acc is None:
+                await commander.send(f"Seems like you don't have an account with {recipient}. "
+                                     f"If you want to create one, use the command ``.add_account <user_id>``")
+                return
+
+            balance = acc.balance
+            if not acc.is_owner(commander.id):
+                balance *= -1
+
+            await commander.send(f"Your current balance with {recipient.name} is: {balance}€")
 
         @self.command()
         async def cancel(ctx: commands.context):
