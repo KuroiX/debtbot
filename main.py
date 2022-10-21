@@ -1,9 +1,9 @@
 from Bots import CommandBot
-from Accounts import AccountManager
+import Accounts
 
 
 def main():
-    account_manager = AccountManager()
+    account_manager = Accounts.LocalAccountManager()
     command_bot = CommandBot.CommandBot(account_manager)
     command_bot.run_bot()
 
