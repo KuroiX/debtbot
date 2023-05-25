@@ -13,5 +13,5 @@ class AccountManager(ABC):
         pass
 
     @abstractmethod
-    async def create(self, user_id_1: int, user_id_2: int) -> Account:
+    def create(self, user_id_1: int, user_id_2: int) -> Account:
         pass

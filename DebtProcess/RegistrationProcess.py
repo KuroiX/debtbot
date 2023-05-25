@@ -39,7 +39,7 @@ class RegistrationProcess(DebtProcess.Process):
         # it it was in CommandBot, the command bot would need the result of the process as well
         # seems kinda unnecessary
         # especially because not all processes need an account manager and a callback like thing
-        await self.__account_manager.create(self.requester.id, self.recipient.id)
+        self.__account_manager.create(self.requester.id, self.recipient.id)
 
         balance = 0.00
         await self.requester.send(f"Successfully created an account with {self.recipient}.\n"
