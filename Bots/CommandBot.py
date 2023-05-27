@@ -186,4 +186,4 @@ class CommandBot(commands.Bot):
 
     def run_bot(self):
         load_dotenv()
-        self.run(os.getenv("TEST_TOKEN"))
+        self.run(os.getenv("TOKEN"))
