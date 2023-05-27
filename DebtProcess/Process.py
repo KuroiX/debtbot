@@ -21,9 +21,12 @@ class Process(ABC):
 
         self._active_reactions = []
 
+    def next_steps(self):
+        return -1, None
+
     @abstractmethod
     def retrieve_information(self):
-        pass
+        return -1, None
 
     async def start(self):
         await self.__ask_next_question()

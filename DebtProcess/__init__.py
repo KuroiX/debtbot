@@ -5,3 +5,4 @@ from .RegistrationProcess import RegistrationProcess
 from .AddProcess import AddProcess
 from .SimpleAddProcess import SimpleAddProcess
 from .GasAddProcess import GasAddProcess
+from .ChooseAccountProcess import ChooseAccountProcess

@@ -15,3 +15,7 @@ class AccountManager(ABC):
     @abstractmethod
     def create(self, user_id_1: int, user_id_2: int) -> Account:
         pass
+
+    @abstractmethod
+    def find_all(self, user_id_1: int) -> list:
+        pass

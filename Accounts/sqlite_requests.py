@@ -22,6 +22,15 @@ def acc_in_database(id_1: int, id_2: int):
         return first, second
 
 
+def find_all_accs(id_1: int):
+    with sl.connect("accounts.db") as con:
+        data_1: sl.Cursor = con.execute(sql_find_all(id_1))
+        result = []
+        for row in data_1:
+            result.append(row)
+        return result
+
+
 def get_balance(id_1, id_2):
     # this only works if the account already exists, which it does
     with sl.connect("accounts.db") as con:

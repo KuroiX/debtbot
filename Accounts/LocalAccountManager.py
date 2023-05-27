@@ -1,6 +1,7 @@
 from Accounts import Account, AccountManager
 
-from .sqlite_requests import acc_in_database, create_acc
+from .sqlite_requests import acc_in_database, create_acc, find_all_accs
+
 
 class LocalAccountManager(AccountManager):
     def __init__(self):
@@ -31,3 +32,17 @@ class LocalAccountManager(AccountManager):
         acc = Account(user_id_1, user_id_2)
         self._accounts[(user_id_1, user_id_2)] = acc
         return acc
+
+    def find_all(self, user_id_1: int) -> list:
+
+        accs = find_all_accs(user_id_1)
+
+        all_accs = []
+
+        for key1, key2, amount in accs:
+            if key1 == user_id_1:
+                all_accs.append(key2)
+            elif key2 == user_id_1:
+                all_accs.append(key1)
+
+        return all_accs

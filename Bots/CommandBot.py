@@ -22,7 +22,7 @@ class CommandBot(commands.Bot):
 
     def __define_commands(self):
         @self.command()
-        async def add_account(ctx: commands.context, user_id: int):
+        async def create_account(ctx: commands.context, user_id: int):
             commander = ctx.author
             try:
                 recipient = await self.fetch_user(user_id)
@@ -44,7 +44,34 @@ class CommandBot(commands.Bot):
             self.__running_processes[commander.id] = registration_process
 
         @self.command()
-        async def add(ctx: commands.context, user_id: int):
+        async def add(ctx: commands.context):
+
+            commander = ctx.author
+
+            accs = self.__account_manager.find_all(commander.id)
+
+            if len(accs) == 0:
+                await commander.send(f"Seems like you don't have any accounts."
+                                     f"If you want to create one, use the command ``.add_account user_id``")
+                return
+
+            recipients = []
+
+            for user_id in accs:
+                try:
+                    recipient = await self.fetch_user(user_id)
+                    recipients.append(recipient)
+                except discord.errors.NotFound:
+                    await ctx.send(f"Account {user_id} is in database, but no user could be found.")
+                    pass
+
+            choose_process = DebtProcess.ChooseAccountProcess(commander, commander, recipients, self)
+            await choose_process.start()
+
+            self.__running_processes[commander.id] = choose_process
+
+        @self.command()
+        async def add_by_id(ctx: commands.context, user_id: int):
 
             commander = ctx.author
 
@@ -115,7 +142,11 @@ class CommandBot(commands.Bot):
         completed = await self.__running_processes[sender_id].process(payload)
 
         if completed:
+            code, data = self.__running_processes[sender_id].next_steps()
             self.__remove_process(sender_id)
+            if code == 0:
+                acc = self.__account_manager.fetch(data[0].id, data[1].id)
+                await self.start_add_process(data[0], data[1], acc)
 
     async def on_message(self, message: discord.Message):
         if message.author == self.user:
@@ -133,15 +164,26 @@ class CommandBot(commands.Bot):
         completed = await self.__running_processes[sender_id].process(message)
 
         if completed:
+            code, data = self.__running_processes[sender_id].next_steps()
             self.__remove_process(sender_id)
+            if code == 0:
+                acc = self.__account_manager.fetch(data[0].id, data[1].id)
+                await self.start_add_process(data[0], data[1], acc)
+
+    async def start_add_process(self, requester: discord.User, recipient: discord.User, acc: Accounts.Account):
+        addition_process = DebtProcess.AddProcess(requester, recipient, acc)
+        await addition_process.start()
+
+        self.__running_processes[recipient.id] = addition_process
+        self.__running_processes[requester.id] = addition_process
 
     def __remove_process(self, sender_id):
-        # TODO: error handling in case of single user process
         sender = self.__running_processes[sender_id].requester
         recipient = self.__running_processes[sender_id].recipient
         del self.__running_processes[sender.id]
-        del self.__running_processes[recipient.id]
+        if sender.id != recipient.id:
+            del self.__running_processes[recipient.id]
 
     def run_bot(self):
         load_dotenv()
-        self.run(os.getenv("TOKEN"))
+        self.run(os.getenv("TEST_TOKEN"))
